@@ -385,8 +385,18 @@ input {
   left: 14.29%; /* 78/546 */
   width: 78.39%; /* 428/546 */
   aspect-ratio: 428 / 371;
-  overflow: hidden;
+  overflow: visible;
   z-index: 1;
+
+  display: flex;
+  flex-direction: column-reverse;
+
+  @media (min-width: 599px) {
+    .sd-feedback-wrap {
+      position: relative;
+      bottom: -20%;
+    }
+  }
 }
 .sd-mascot-img-wrapper img {
   position: absolute;
@@ -1341,7 +1351,10 @@ input {
     flex-direction: row;
     align-items: center;
   }
-  .sd-hero-text { gap: 12px; flex: 1 1 auto; }
+  .sd-hero-text {
+    gap: 12px;
+    flex: 1 1 auto;
+  }
   .sd-condition-badge {
     font-size: 14px;
   }
@@ -1380,6 +1393,7 @@ input {
     left: 12.17%; /* 41/337 */
     width: 81.9%; /* 276/337 */
     aspect-ratio: 276 / 333;
+    flex-direction: column;
   }
   .sd-mascot-img-wrapper img {
     top: 0;
@@ -3464,6 +3478,7 @@ input {
 .sd-feedback-wrap.is-mobile {
   display: flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   z-index: 6;
 }
@@ -3574,8 +3589,8 @@ input {
 
 @media (max-width: 599px) {
   .sd-feedback-wrap {
-    margin-top: 8px;
-    padding-bottom: 20px;
+    /* margin-top: 8px;
+    padding-bottom: 20px; */
   }
   .sd-feedback-widget {
     width: 168px;

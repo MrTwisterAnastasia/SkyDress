@@ -46,7 +46,9 @@
     if (!zone) return;
     /* Clean up any stale widget + shadow from a previous render */
     document
-      .querySelectorAll(".sd-feedback-widget, .sd-feedback-shadow, .sd-feedback-wrap")
+      .querySelectorAll(
+        ".sd-feedback-widget, .sd-feedback-shadow, .sd-feedback-wrap",
+      )
       .forEach((n) => n.remove());
 
     const { el } = H();
@@ -119,27 +121,10 @@
       ),
     );
 
-    /* Decorative shadow ellipse beneath the widget (desktop only). */
-    const shadow = el("div", { class: "sd-feedback-shadow" });
-    const isMobile = window.matchMedia("(max-width: 599px)").matches;
-    if (isMobile) {
-      /* Mobile: anchor inside .sd-hero so the widget sits to the right of
-         the temperature block, above the mascot, with 14 px gap. */
-      const hero = document.querySelector(".sd-hero");
-      if (!hero) return;
-      const wrap = el("div", { class: "sd-feedback-wrap is-mobile" }, widget);
-      hero.appendChild(wrap);
-    } else {
-      /* Desktop: sibling after .sd-mascot-zone in the right column, centered
-         under the mascot body. */
-      const wrap = el(
-        "div",
-        { class: "sd-feedback-wrap is-desktop" },
-        widget,
-        shadow,
-      );
-      zone.parentNode.insertBefore(wrap, zone.nextSibling);
-    }
+    const hero = document.querySelector(".sd-mascot-img-wrapper");
+    if (!hero) return;
+    const wrap = el("div", { class: "sd-feedback-wrap is-mobile" }, widget);
+    hero.appendChild(wrap);
   }
 
   /* === Success toast === */
