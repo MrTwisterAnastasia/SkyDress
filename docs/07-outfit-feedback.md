@@ -2,7 +2,9 @@
 
 ## Purpose
 
-After the mascot and outfit suggestion are displayed on the main page, a compact **feedback widget** appears. It lets the user signal whether the suggested outfit matched how they actually feel, so the app can nudge `state.userPrefs.sensitivityOffset` and personalise future suggestions.
+After the mascot and outfit suggestion are displayed on the main page, a compact **feedback widget** appears. It lets the user signal whether the suggested outfit matched how they actually feel. Each press both **records the feedback** and **immediately re-renders the displayed outfit** so the user sees their adjustment applied right away.
+
+The widget writes through to the same `state.userPrefs.sensitivityOffset` that the slider in the Preferences panel reads — the slider and the widget are two faces of the same preference (see `docs/06-settings-profile.md` for the slider, `docs/04-mascot-outfits.md` for the outfit-selection algorithm).
 
 ---
 
@@ -122,14 +124,61 @@ The widget is **visible** when `!state.feedback.hidden.has(currentKey)`.
 
 ## Visibility Rules
 
-| Event | Widget behaviour |
-|---|---|
-| Page load / city selected (initial) | Widget visible (using default `currentKey` — `"hourly:15"`) |
-| User clicks a different hour card | Widget becomes visible for the new key (if not already hidden) |
-| User clicks a different day card (10-day tab) | Widget becomes visible for the new key (if not already hidden) |
-| User clicks the X (close) button | Add `currentKey` to `state.feedback.hidden`; hide the widget. **No** success notification. |
-| User clicks any action button (submit) | Add `currentKey` to `state.feedback.hidden`; hide the widget. Show the success notification for 5 seconds. |
-| User returns to a key already in `hidden` | Widget stays hidden. |
+| Event | Widget behaviour | Outfit / offset behaviour |
+|---|---|---|
+| Page load / city selected (initial) | Widget visible (using default `currentKey` — `"hourly:15"`) | — |
+| User clicks a different hour card | Widget becomes visible for the new key (if not already hidden) | — |
+| User clicks a different day card (10-day tab) | Widget becomes visible for the new key (if not already hidden) | — |
+| User clicks the X (close) button | Add `currentKey` to `state.feedback.hidden`; hide the widget. **No** success notification. | — (offset unchanged) |
+| **Dress cooler** | Add `currentKey` to `state.feedback.hidden`; hide the widget. Show the success toast. | `sensitivityOffset = clamp(sensitivityOffset − 1, −2, +2)`. Main page re-renders → mascot + clothing cards shift one level lighter (or stay the same if clamped). |
+| **Looks good** | Add `currentKey` to `state.feedback.hidden`; hide the widget. Show the success toast. | No change to offset. No outfit re-render needed. |
+| **Dress warmer** | Add `currentKey` to `state.feedback.hidden`; hide the widget. Show the success toast. | `sensitivityOffset = clamp(sensitivityOffset + 1, −2, +2)`. Main page re-renders → mascot + clothing cards shift one level heavier (or stay the same if clamped). |
+| User returns to a key already in `hidden` | Widget stays hidden. | — |
+
+---
+
+## Logic — Effect of Each Button
+
+The widget's three action buttons are all wired to the same `state.userPrefs.sensitivityOffset` that the Preferences slider writes to. The button click updates the offset (within the slider's range), then a single main-page render swaps the mascot and clothing icons to the new effective outfit.
+
+### Pseudo-code
+
+```js
+function onSubmit(direction) {
+  const state = window.SkyDress.state;
+  if (direction === "warmer") {
+    state.userPrefs.sensitivityOffset = Math.min(
+      state.userPrefs.sensitivityOffset + 1,
+      +2,
+    );
+  } else if (direction === "cooler") {
+    state.userPrefs.sensitivityOffset = Math.max(
+      state.userPrefs.sensitivityOffset - 1,
+      -2,
+    );
+  }
+  // "good" leaves the offset unchanged.
+
+  state.feedback.hidden.add(currentKey());
+  showFeedbackToast();
+  window.SkyDress.app.render(); // re-renders mascot + clothing for the new effective outfit
+}
+```
+
+### Direction reference
+
+| Button | Direction | Offset change | Outfit direction |
+|---|---|---|---|
+| Dress cooler | "cooler" | `−1` (clamped at `−2`) | Lighter outfit (toward Very Hot) |
+| Looks good | "good" | none | Unchanged |
+| Dress warmer | "warmer" | `+1` (clamped at `+2`) | Heavier outfit (toward Very Cold) |
+
+### Edge cases
+
+- **Offset already at the slider extreme.** If `sensitivityOffset === +2` and the user clicks Dress warmer, the offset stays at `+2` (silent no-op). Same for `−2` + Dress cooler. The success toast still appears so the user gets feedback that their input was received.
+- **Effective outfit clamps at the array bounds.** The effective outfit is `clamp(baseIndex + sensitivityOffset, 0, 6)`. So if the current hour's base outfit is Very Hot (index 0) and the user clicks Dress cooler, the offset may decrement (e.g. `0 → −1`), but the displayed outfit stays Very Hot because `clamp(0 + (−1), 0, 6) = 0`. The cooler preference becomes visible only on hours/days whose base outfit is heavier and where `baseIndex + offset` lands inside the array.
+- **Persistence to the slider.** Because the widget writes to the same `state.userPrefs.sensitivityOffset` that the Preferences slider reads, opening Preferences after giving "Dress warmer" feedback shows the slider visibly moved one notch toward "Always cold". This is intentional — one preference, two surfaces.
+- **Log out.** `doLogout()` resets `sensitivityOffset` to `0` along with the other prefs. Any feedback applied during the session is lost.
 
 ---
 
@@ -181,12 +230,18 @@ Only one notification is shown at a time. If the user triggers feedback again be
 | State | Description |
 |---|---|
 | Widget visible | Default on page load for the active hour/day |
-| Widget dismissed (X) | User clicked X — widget hidden, no notification |
-| Submitted — Dress cooler | Widget hidden, green toast shown |
-| Submitted — Looks good | Widget hidden, green toast shown |
-| Submitted — Dress warmer | Widget hidden, green toast shown |
+| Widget dismissed (X) | User clicked X — widget hidden, no notification, offset unchanged |
+| **Submitted — Dress cooler (mid-range)** | Widget hidden, toast shown, `sensitivityOffset` decremented by 1, **mascot + clothing cards visibly shift one level lighter on the main page** |
+| **Submitted — Dress cooler (already at `−2`)** | Widget hidden, toast shown, offset stays `−2`, displayed outfit unchanged (silent no-op) |
+| **Submitted — Dress cooler (already on Very Hot)** | Offset may decrement, but displayed outfit stays Very Hot (array clamp) — verifiable by opening Preferences and seeing the slider moved |
+| Submitted — Looks good | Widget hidden, toast shown, offset & outfit unchanged |
+| **Submitted — Dress warmer (mid-range)** | Widget hidden, toast shown, `sensitivityOffset` incremented by 1, **mascot + clothing cards visibly shift one level heavier on the main page** |
+| **Submitted — Dress warmer (already at `+2`)** | Widget hidden, toast shown, offset stays `+2`, displayed outfit unchanged (silent no-op) |
+| **Submitted — Dress warmer (already on Very Cold)** | Offset may increment, but displayed outfit stays Very Cold (array clamp) — verifiable by opening Preferences and seeing the slider moved |
 | Toast auto-dismiss | Toast slides out after 5 s |
-| Switch to new hour | Widget re-appears if that hour's key is not in `hidden` |
-| Switch to new day | Widget re-appears if that day's key is not in `hidden` |
+| Switch to new hour | Widget re-appears if that hour's key is not in `hidden`. **Effective outfit for that hour reflects the cumulative `sensitivityOffset`** from prior feedback/slider changes. |
+| Switch to new day | Widget re-appears if that day's key is not in `hidden`. Same offset-aware outfit selection applies. |
 | Previously dismissed hour | Widget stays hidden when returning to a key already in `hidden` |
+| **Feedback → Preferences round-trip** | After clicking Dress warmer, opening Preferences shows the slider one notch toward "Always cold"; after clicking Dress cooler, one notch toward "Always warm" |
 | Logged-out user | Widget is not rendered at all |
+| **Log out resets offset** | After logout, `sensitivityOffset` returns to `0` (per `docs/06`); any prior feedback is lost |

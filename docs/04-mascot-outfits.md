@@ -17,19 +17,44 @@ The section occupies the vertically dominant centre area of both layouts.
 
 ## 1. Temperature-to-Outfit Mapping
 
-Selection is based on the **Feels Like** temperature (wind-chill corrected). Use the table below — every row shows what asset to load and what clothing icons to display.
+Selection happens in two steps:
 
-| Level | Feels Like | Mascot PNG | Clothing icons (from `assets/icons/clothing/`) |
-|---|---|---|---|
-| **Very Hot** | > 35 °C | `assets/mascot_outfits/very-hot-weather.png` | `very-hot_waistcoat.svg` · `very-hot_briefs.svg` |
-| **Hot** | 25–35 °C | `assets/mascot_outfits/hot-weather.png` | `hot_cap.svg` · `hot_blouse.svg` · `hot_shorts.svg` |
-| **Warm** | 18–25 °C | `assets/mascot_outfits/warm-weather.png` | `warm_hoodie.svg` · `warm_baggy-jeans.svg` |
-| **Cool** | 10–18 °C | `assets/mascot_outfits/cool-weather.png` | `cool_beanie.svg` · `cool_turtleneck-sweater.svg` · `cool_boyfriend-jeans.svg` |
-| **Cold** | 0–10 °C | `assets/mascot_outfits/cold-weather.png` | `cold_beanie.svg` · `cold_turtleneck-sweater.svg` · `cold_down-jacket.svg` · `cold_boyfriend-jeans.svg` |
-| **Freezing** | −10–0 °C | `assets/mascot_outfits/freezing-weather.png` | `freezing_beanie.svg` · `freezing_turtleneck-sweater.svg` · `freezing_coat.svg` · `freezing_boyfriend-jeans.svg` |
-| **Very Cold** | < −10 °C | `assets/mascot_outfits/ver-cold-weather.png` ⚠️ | `very-cold_beanie.svg` · `very-cold_coat.svg` · `very-cold_jeans.svg` |
+1. **Base outfit from Feels Like.** Look up the 7-level table below using the wind-chill corrected `feelsLike` value.
+2. **Apply the user's sensitivity offset.** The outfit level array, light → heavy, is:
+
+   ```
+   ['very-hot', 'hot', 'warm', 'cool', 'cold', 'freezing', 'very-cold']
+       0          1       2        3        4        5            6
+   ```
+
+   `effectiveIndex = clamp(baseIndex + state.userPrefs.sensitivityOffset, 0, 6)`.
+
+   The offset is set by the slider in the Preferences panel (`docs/06`) and nudged by ±1 every time the user clicks **Dress warmer** / **Dress cooler** in the feedback widget (`docs/07`). Default = `0`, so a fresh session shows the base outfit unchanged.
+
+The table below lists what asset to load for each level. The actual *displayed* level is the level at `effectiveIndex`, not the level at `baseIndex` — i.e. the mascot PNG and the clothing icons both come from the *effective* outfit.
+
+| Index | Level | Feels Like (base only) | Mascot PNG | Clothing icons (from `assets/icons/clothing/`) |
+|---|---|---|---|---|
+| 0 | **Very Hot** | > 35 °C | `assets/mascot_outfits/very-hot-weather.png` | `very-hot_waistcoat.svg` · `very-hot_briefs.svg` |
+| 1 | **Hot** | 25–35 °C | `assets/mascot_outfits/hot-weather.png` | `hot_cap.svg` · `hot_blouse.svg` · `hot_shorts.svg` |
+| 2 | **Warm** | 18–25 °C | `assets/mascot_outfits/warm-weather.png` | `warm_hoodie.svg` · `warm_baggy-jeans.svg` |
+| 3 | **Cool** | 10–18 °C | `assets/mascot_outfits/cool-weather.png` | `cool_beanie.svg` · `cool_turtleneck-sweater.svg` · `cool_boyfriend-jeans.svg` |
+| 4 | **Cold** | 0–10 °C | `assets/mascot_outfits/cold-weather.png` | `cold_beanie.svg` · `cold_turtleneck-sweater.svg` · `cold_down-jacket.svg` · `cold_boyfriend-jeans.svg` |
+| 5 | **Freezing** | −10–0 °C | `assets/mascot_outfits/freezing-weather.png` | `freezing_beanie.svg` · `freezing_turtleneck-sweater.svg` · `freezing_coat.svg` · `freezing_boyfriend-jeans.svg` |
+| 6 | **Very Cold** | < −10 °C | `assets/mascot_outfits/ver-cold-weather.png` ⚠️ | `very-cold_beanie.svg` · `very-cold_coat.svg` · `very-cold_jeans.svg` |
 
 > ⚠️ **Filename typo:** The very-cold mascot file is `ver-cold-weather.png` (missing the "y") — use exactly that name.
+
+### Worked examples
+
+| Feels Like | Base level | Offset | Effective level | Mascot shown |
+|---|---|---|---|---|
+| 14 °C | Cool (3) | 0 | Cool (3) | `cool-weather.png` |
+| 14 °C | Cool (3) | +1 | Cold (4) | `cold-weather.png` |
+| 14 °C | Cool (3) | +2 | Freezing (5) | `freezing-weather.png` |
+| 14 °C | Cool (3) | −2 | Warm (2)→Hot (1)? No: `3−2 = 1` → Hot | `hot-weather.png` |
+| 38 °C | Very Hot (0) | −1 | clamp(0−1, 0, 6) = 0 → Very Hot | `very-hot-weather.png` (clamped — already lightest) |
+| −15 °C | Very Cold (6) | +2 | clamp(6+2, 0, 6) = 6 → Very Cold | `ver-cold-weather.png` (clamped — already heaviest) |
 
 ---
 
@@ -196,10 +221,18 @@ There is no `<svg>` connector, no per-position card-modifier classes, and no per
 
 ### Switching outfits
 
-When `feelsLike` crosses a threshold and the active outfit level changes:
-1. Swap the `src` on `.sd-mascot-img-wrapper > img` to the new mascot PNG.
-2. Re-render the clothing cards — the new set of `(body, file)` pairs comes from `OUTFIT_CLOTHING[level]`; positions come from `CARD_POSITIONS[tier][body]`.
-3. Re-evaluate umbrella visibility from the new hour's `rainChance`.
+The effective outfit can change for **three** reasons in the extended prototype:
+
+1. The user navigates to a different hour or day whose `feelsLike` falls into a different temperature band → `baseIndex` changes.
+2. The user saves the sensitivity slider in Preferences → `sensitivityOffset` changes.
+3. The user clicks **Dress warmer** / **Dress cooler** on the feedback widget → `sensitivityOffset` changes by ±1.
+
+In all three cases the renderer runs the same routine:
+
+1. Compute `effectiveIndex = clamp(baseIndex + state.userPrefs.sensitivityOffset, 0, 6)` and resolve it to the outfit level string.
+2. Swap the `src` on `.sd-mascot-img-wrapper > img` to the new mascot PNG.
+3. Re-render the clothing cards — the new set of `(body, file)` pairs comes from `OUTFIT_CLOTHING[level]`; positions come from `CARD_POSITIONS[tier][body]`.
+4. Re-evaluate umbrella visibility from the active record's `rainChance` (the umbrella is tied to weather, not to the offset).
 
 Because mascot wrapper position is identical across outfits, the mascot stays still while only its clothing PNG fades to the new outfit. No transition animation is required for the prototype — the loading state covers any perceptible delay from a city switch.
 

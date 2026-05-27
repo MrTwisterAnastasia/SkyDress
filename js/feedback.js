@@ -54,11 +54,31 @@
     const { el } = H();
 
     const onSubmit = (direction) => {
+      /* Nudge sensitivityOffset within the slider's [-2, +2] range.
+         "warmer" = user wants heavier outfit = offset toward +2.
+         "cooler" = user wants lighter outfit = offset toward -2.
+         "good"   = no change.
+         At the slider extremes the click is a silent no-op; the toast
+         still appears so the user knows the input was received. */
+      const prev = state.userPrefs.sensitivityOffset;
+      if (direction === "warmer") {
+        state.userPrefs.sensitivityOffset = Math.min(prev + 1, 2);
+      } else if (direction === "cooler") {
+        state.userPrefs.sensitivityOffset = Math.max(prev - 1, -2);
+      }
       state.feedback.hidden.add(currentKey());
       showFeedbackToast();
-      /* Drop the widget without a full re-render */
-      const w = document.querySelector(".sd-feedback-widget");
-      if (w) w.remove();
+      /* Full re-render so the mascot PNG and clothing icons resolve to the
+         new effective outfit. Toast (appended to document.body) survives the
+         render — render() only clears $app and a fixed set of overlays. */
+      if (state.userPrefs.sensitivityOffset !== prev) {
+        H().render();
+      } else {
+        /* Offset unchanged ("good", or click at the slider extreme) — just
+           drop the widget without a full re-render to save work. */
+        const w = document.querySelector(".sd-feedback-widget");
+        if (w) w.remove();
+      }
     };
     const onDismiss = () => {
       state.feedback.hidden.add(currentKey());

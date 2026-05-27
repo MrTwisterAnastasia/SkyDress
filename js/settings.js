@@ -31,7 +31,10 @@
 
   /* Doc/06 §5 mapping — preferences slider: leftmost (Always cold) = +4.
      Note this is the INVERSE of the sign-up slider mapping in doc/05. */
-  const PREF_OFFSETS = [4, 2, 0, -2, -4];
+  /* Slider positions → sensitivityOffset (outfit-level steps, not °C).
+     Index 0 = leftmost "Always cold" (heaviest outfit shift), index 4 =
+     rightmost "Always warm" (lightest outfit shift). See docs/06 §5.1. */
+  const PREF_OFFSETS = [2, 1, 0, -1, -2];
   function prefSliderPosFromOffset(offset) {
     const i = PREF_OFFSETS.indexOf(offset);
     return i === -1 ? 2 : i;

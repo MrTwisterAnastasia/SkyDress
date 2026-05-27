@@ -4,8 +4,9 @@
     {
       "name": "skydress-extended",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["-y", "http-server", "-p", "8766", "-c-1", "--cors", "/Users/anastasiia/Documents/pet project/skyDress-extended"],
-      "port": 8766
+      "runtimeArgs": ["-y", "http-server", "-c-1", "--cors", "/Users/anastasiia/Documents/pet project/skyDress-extended"],
+      "port": 8767,
+      "autoPort": true
     }
   ]
 }

@@ -415,17 +415,26 @@ Open Sans 10px center. Active label: 700 weight `#F48525`. Inactive labels: 500 
 
 #### Sensitivity → `sensitivityOffset` Mapping
 
-| Slider position | Label | `sensitivityOffset` |
-|---|---|---|
-| 1 (leftmost) | Always cold | `+4` |
-| 2 | Usually cold | `+2` |
-| 3 (center) | Average | `0` |
-| 4 | Usually warm | `−2` |
-| 5 (rightmost) | Always warm | `−4` |
+`sensitivityOffset` is an **outfit-level shift** (number of steps along the 7-level outfit array, light → heavy), not a temperature offset. A positive value moves the suggested outfit toward heavier clothing; a negative value moves it toward lighter clothing.
+
+| Slider position | Label | `sensitivityOffset` | Effect on the suggested outfit |
+|---|---|---|---|
+| 1 (leftmost) | Always cold | `+2` | Two levels heavier than the raw Feels Like reading (user feels cold → dress warmer) |
+| 2 | Usually cold | `+1` | One level heavier |
+| 3 (center) | Average | `0` | Outfit matches the raw Feels Like reading (default) |
+| 4 | Usually warm | `−1` | One level lighter |
+| 5 (rightmost) | Always warm | `−2` | Two levels lighter (user feels warm → dress cooler) |
 
 **Default state:** position 3 (Average, offset = 0).
 
-On save, `state.userPrefs.sensitivityOffset` is updated to the selected value. This is a stored preference only — it does not change the outfit shown on the main page in this prototype.
+**Effect on the main page (on Save):**
+1. Write the new value to `state.userPrefs.sensitivityOffset`.
+2. Re-render the main page. The mascot zone re-computes the effective outfit as `clamp(baseIndex + sensitivityOffset, 0, 6)` against the active hour/day's Feels Like.
+3. The mascot PNG and the floating clothing-icon cards update to the new outfit; the umbrella (rain-based, not offset-based) is unaffected.
+
+The offset is also nudged by ±1 each time the user clicks Dress warmer / Dress cooler in the feedback widget (`docs/07`), so the slider is the **shared source of truth** between the Preferences panel and the feedback widget — opening Preferences after giving feedback shows the slider in its new position.
+
+**Clamping:** the effective outfit index is always clamped to `[0, 6]`. If `baseIndex + offset` would land outside the range (e.g. a Very Hot base with offset `−2`), the displayed outfit stays pinned at the bound (`Very Hot`). The offset itself is clamped to the slider's range `[−2, +2]`.
 
 ---
 
@@ -639,7 +648,7 @@ Track with `state.panelDirty`. Set to `true` when any field in the open panel di
 
 1. Write pending values to `state.userPrefs` (and `state.auth.user` for profile fields).
 2. `panelDirty = false`, close panel and overlay.
-3. Re-render affected main-page components: pill initials, stats panel cards (metric visibility). The sensitivity offset is stored in `state.userPrefs.sensitivityOffset` but does not affect outfit selection in this prototype.
+3. Re-render affected main-page components: pill initials, stats panel cards (metric visibility), **and the mascot zone** — because `state.userPrefs.sensitivityOffset` is now part of the outfit-selection input, any change to the slider re-resolves the effective outfit (`clamp(baseIndex + sensitivityOffset, 0, 6)`) and swaps the mascot PNG + clothing icon cards accordingly.
 4. Show the success notification in the top-right corner (see below).
 
 #### Success notification
@@ -690,8 +699,9 @@ state.auth = {
 
 ```js
 state.userPrefs = {
-  // Outfit sensitivity
-  sensitivityOffset: 0,   // integer: -4 / -2 / 0 / +2 / +4
+  // Outfit-level shift applied on top of the Feels-Like-based base outfit.
+  // Range: -2 .. +2 (5 slider positions). Positive = heavier outfit.
+  sensitivityOffset: 0,   // integer: -2 / -1 / 0 / +1 / +2
 
   // Stat panel card visibility
   visibleMetrics: {
@@ -721,7 +731,15 @@ state.panelDirty = false;  // true when open panel has unsaved changes
 
 ### `sensitivityOffset` scope
 
-`state.userPrefs.sensitivityOffset` is saved and persists for the session, but the outfit selection on the main page continues to use the raw `feelsLike` value from mock data. The slider is a stored preference only — it has no effect on outfit logic in this prototype.
+`state.userPrefs.sensitivityOffset` is the **single source of truth** for the outfit-level shift across the prototype:
+
+- Set via the slider in the Preferences panel (this doc).
+- Nudged ±1 by the **Dress warmer** / **Dress cooler** buttons on the feedback widget (`docs/07`).
+- Read every render by the mascot zone to resolve the displayed outfit (`docs/04`, section 1).
+- Reset to `0` on log out (see Section 7 — Log Out Dialog).
+- Persists for the session only — no localStorage; a page refresh restores `0`.
+
+The slider's range is `[−2, +2]`. The feedback widget enforces the same clamp so the offset never escapes the slider's visible range.
 
 ---
 
@@ -763,7 +781,9 @@ All of the following must be demonstrable in the prototype:
 - [ ] All 7 metric toggles showing correct ON/OFF default
 - [ ] Each metric toggle individually flippable
 - [ ] Saving metric toggles hides/shows cards on main stats panel
-- [ ] Saving sensitivity offset stores the value — slider position is the only visible change, no outfit update on main page
+- [ ] **Saving the sensitivity slider shifts the displayed outfit on the main page** — e.g. with Feels Like = 14 °C (base Cool), saving "Always cold (+2)" must switch the mascot to Freezing; saving "Always warm (−2)" must switch it to Warm
+- [ ] Outfit shift clamps at the array bounds — e.g. on a Very Hot day, "Always warm (−2)" still shows Very Hot (clamped at index 0); on a Very Cold day, "Always cold (+2)" still shows Very Cold (clamped at index 6)
+- [ ] Slider position reflects the current `sensitivityOffset` when the panel opens, including any nudges from the feedback widget since the last open
 
 ### Notifications Panel
 

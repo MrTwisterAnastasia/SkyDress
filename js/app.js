@@ -580,19 +580,22 @@
       legs: { top: 74.39, left: 0 } /* 276/371, 0       */,
       /* torso-right shifted left from 76.19% so the umbrella has room on the
          right edge in 4-card outfits without overlapping the jacket. */
-      "torso-right": { top: 63.34, left: 60 },
+      "torso-right": { top: 63.34, left: 75 },
     },
     mobile: {
       head: { top: 3.6, left: 74.78 } /* 12/333,  252/337 */,
       torso: { top: 23.42, left: 0.89 } /* 78/333,  3/337   */,
       /* Bottom cards nudged up so the collapsed mobile sheet doesn't clip them. */
       legs: { top: 60, left: 0 },
-      "torso-right": { top: 45, left: 74.78 },
+      "torso-right": { top: 65, left: 74.78 },
     },
   };
 
   function renderMascotZone(rec) {
-    const outfitLevel = D.OUTFIT_BY_FEELS_LIKE(rec.feelsLike);
+    const outfitLevel = D.outfitByFeelsLikeWithOffset(
+      rec.feelsLike,
+      state.userPrefs.sensitivityOffset,
+    );
     const mascotFile = D.MASCOT_FILENAME[outfitLevel];
     const clothing = D.OUTFIT_CLOTHING[outfitLevel] || [];
     const showUmbrella = rec.rainChance > 30;
@@ -757,6 +760,22 @@
   function renderStatsPanel() {
     const rec = activeRecord();
     const vm = state.userPrefs.visibleMetrics;
+    /* If every metric card in the panel is toggled off, hide the whole
+       panel chrome — strip, tab, overlay, and close tab. The user has no
+       way to open it back up until they re-enable a metric in Preferences.
+       Also force-close it in case it was open when the last metric was
+       hidden. */
+    const anyStatsVisible =
+      vm.sunriseSunset ||
+      vm.moonPhase ||
+      vm.visibility ||
+      vm.pressure ||
+      vm.airQuality ||
+      vm.allergyOutlook;
+    if (!anyStatsVisible) {
+      if (state.statsOpen) state.statsOpen = false;
+      return el("div");
+    }
     /* Three columns per the desktop layout:
          col 1 — Sun Cycle + Moon Phase
          col 2 — Visibility + Pressure
@@ -1462,7 +1481,11 @@
 
   /* Extended URL handling: ?view=signin|signup|main|public and ?error=true */
   const initView = initParams.get("view");
-  if (initView === "signin" || initView === "signup" || initView === "signupform")
+  if (
+    initView === "signin" ||
+    initView === "signup" ||
+    initView === "signupform"
+  )
     state.view = initView;
   else if (initView === "main") {
     /* Allow developers to land directly on the main page (logged-out pill). */

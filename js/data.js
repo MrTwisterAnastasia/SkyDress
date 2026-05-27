@@ -73,6 +73,20 @@ window.SkyDress = window.SkyDress || {};
     return 'very-cold';
   };
 
+  /* Outfit levels in order light → heavy. Index 0 = lightest (Very Hot),
+     index 6 = heaviest (Very Cold). The sensitivityOffset is added to the
+     base index from OUTFIT_BY_FEELS_LIKE and the result is clamped to this
+     array's bounds. See docs/04 section 1 for the full spec. */
+  const OUTFIT_LEVELS = ['very-hot', 'hot', 'warm', 'cool', 'cold', 'freezing', 'very-cold'];
+
+  function outfitByFeelsLikeWithOffset(feelsLike, offset) {
+    const base = OUTFIT_BY_FEELS_LIKE(feelsLike);
+    const baseIndex = OUTFIT_LEVELS.indexOf(base);
+    const shifted = baseIndex + (Number(offset) || 0);
+    const clamped = Math.max(0, Math.min(OUTFIT_LEVELS.length - 1, shifted));
+    return OUTFIT_LEVELS[clamped];
+  }
+
   /* Mascot filenames — note the deliberate typo on ver-cold. */
   const MASCOT_FILENAME = {
     'very-hot': 'very-hot-weather.png',
@@ -236,6 +250,8 @@ window.SkyDress = window.SkyDress || {};
     hourly,
     daily,
     OUTFIT_BY_FEELS_LIKE,
+    OUTFIT_LEVELS,
+    outfitByFeelsLikeWithOffset,
     MASCOT_FILENAME,
     OUTFIT_CLOTHING,
     CONDITION_ICON,

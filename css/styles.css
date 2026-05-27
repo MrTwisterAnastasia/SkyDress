@@ -420,9 +420,9 @@ input {
 }
 .sd-umbrella {
   position: absolute;
-  top: 60%;
-  left: 85%;
-  width: 14%;
+  top: 50%;
+  left: 80%;
+  width: 25%;
   aspect-ratio: 2 / 3; /* chunkier than the 72/154 mock crop so the umbrella reads clearly */
   height: auto;
   z-index: 4;
@@ -457,6 +457,7 @@ input {
   grid-column: 1 / -1;
   margin-top: 16px;
   padding: 0 0 32px;
+  z-index: 4;
 }
 .sd-toggle {
   width: 248px;
@@ -1388,6 +1389,7 @@ input {
   .sd-mascot-zone {
     max-width: 100%;
     aspect-ratio: 337 / 333;
+    max-height: 300px;
   }
   .sd-mascot-img-wrapper {
     left: 12.17%; /* 41/337 */
@@ -1402,10 +1404,10 @@ input {
     display: none;
   }
   .sd-umbrella {
-    width: 16%;
+    width: 25%;
     aspect-ratio: 2 / 3;
     top: 60%;
-    left: 82%;
+    left: 75%;
   }
   .sd-clothing-card {
     width: 25.22%; /* 85/337 */
@@ -3481,6 +3483,8 @@ input {
   justify-content: center;
   flex-shrink: 0;
   z-index: 6;
+  position: relative;
+  top: 12%;
 }
 .sd-feedback-widget {
   position: relative;
@@ -3589,8 +3593,7 @@ input {
 
 @media (max-width: 599px) {
   .sd-feedback-wrap {
-    /* margin-top: 8px;
-    padding-bottom: 20px; */
+    top: 0% !important;
   }
   .sd-feedback-widget {
     width: 168px;

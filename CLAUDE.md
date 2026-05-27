@@ -68,20 +68,26 @@ When logged in, the **header** gains a profile icon on the right side. Tapping/c
 - Preferences are stored in mock JS state (`state.userPrefs.visibleMetrics`)
 
 **Weather sensitivity (outfit preference):**
-- A slider or segmented control: "I dress warmer than average ← → I dress colder than average"
-- 5 levels: Much Warmer · Warmer · Default · Colder · Much Colder
-- Each level shifts the "Feels Like" threshold used for outfit selection by ±2°C per step
-- Example: user set to "Warmer +2" → outfit selected as if Feels Like is 4°C higher than actual
-- Stored in mock JS state (`state.userPrefs.sensitivityOffset`)
+- A slider with 5 positions describing how the user *feels* in the weather: **Always cold · Usually cold · Average · Usually warm · Always warm**
+- Each position maps to an **outfit-level shift** (not a temperature shift) — the slider moves the suggested outfit up or down the 7-level scale (Very Hot ↔ Very Cold). It does **not** modify the Feels Like reading.
+- Mapping (`state.userPrefs.sensitivityOffset`):
+  - Always cold → `+2` (suggest an outfit **two levels heavier** than the raw Feels Like reading — user feels cold, so dress warmer)
+  - Usually cold → `+1`
+  - Average → `0` (default — outfit matches the raw Feels Like reading)
+  - Usually warm → `−1`
+  - Always warm → `−2` (suggest an outfit **two levels lighter** — user feels warm, so dress cooler)
+- Effective outfit = `clamp(baseOutfitIndex + sensitivityOffset, 0, 6)` where the index order is `[Very Hot, Hot, Warm, Cool, Cold, Freezing, Very Cold]` (light → heavy)
+- Saving the slider re-renders the main page immediately: mascot PNG and clothing-icon cards refresh to the new outfit level
 
 ### 3. Outfit Feedback — `docs/07-outfit-feedback.md`
-On the main weather page, after the mascot and clothing icons are shown, a **feedback widget** appears. The user can rate whether today's outfit suggestion was appropriate:
+On the main weather page, after the mascot and clothing icons are shown, a compact **feedback widget** appears next to the mascot. It has three buttons: **Dress cooler · Looks good · Dress warmer**. Each click both records the feedback *and* immediately re-renders the displayed outfit so the user sees the adjusted suggestion right away.
 
-- Thumbs up ("This outfit was right for the weather")
-- Thumbs down ("I was too hot / too cold")
-- If thumbs down: a follow-up prompt asks "Too hot?" or "Too cold?" — two options
-- Feedback nudges `state.userPrefs.sensitivityOffset` by one step in the appropriate direction and shows a brief confirmation message
-- Feedback can be given once per "session" (mock: once per page load); the widget is hidden after submission
+- **Dress warmer** → `sensitivityOffset += 1` (clamped to `+2`). The mascot + clothing cards immediately re-render to the heavier outfit one level up (e.g. Hot → Warm → Cool → … → Very Cold).
+- **Dress cooler** → `sensitivityOffset -= 1` (clamped to `-2`). The mascot + clothing cards immediately re-render to the lighter outfit one level down (e.g. Cool → Warm → Hot → Very Hot).
+- **Looks good** → no change to `sensitivityOffset` or to the displayed outfit.
+- **Edges (silent no-op):** if the offset is already at its slider extreme (`+2` or `-2`), further presses in that direction do not change the offset and the visible outfit stays the same. The success toast still appears so the user knows the input was received.
+- **Persistence:** the feedback writes through to the same `state.userPrefs.sensitivityOffset` that the slider in Preferences reads — so opening Preferences after giving feedback shows the slider in its new position (single source of truth).
+- **Dismissal:** the widget hides for that specific hour/day key after either submitting feedback or clicking the X (per-card hiding, not session-wide).
 
 ---
 
@@ -287,7 +293,12 @@ Every hour and every day in the mock dataset must include all of these:
 
 ## Clothing Recommendation Logic
 
-The mascot outfit is selected based on the **Feels Like** temperature, using the 7-level mapping above.
+The mascot outfit is selected in two steps:
+
+1. **Base outfit from Feels Like** — look up the 7-level mapping above using the wind-chill corrected `feelsLike` value to get a base outfit index in the array `['very-hot', 'hot', 'warm', 'cool', 'cold', 'freezing', 'very-cold']` (light → heavy, indices `0..6`).
+2. **Apply the user's sensitivity offset** — `effectiveIndex = clamp(baseIndex + state.userPrefs.sensitivityOffset, 0, 6)`. The offset comes from the Preferences slider (`-2 .. +2`) and is nudged by ±1 each time the user clicks Dress warmer / Dress cooler on the feedback widget. A logged-out / fresh-session user has `sensitivityOffset = 0`, so the effective outfit equals the base outfit.
+
+The outfit returned at `effectiveIndex` drives both the mascot PNG and the floating clothing-icon cards. See `docs/04-mascot-outfits.md` for the per-level asset list and `docs/06` / `docs/07` for the slider and feedback flows.
 
 The only accessory shown in the current prototype is the **umbrella**, triggered when rain chance > 30%.
 Use `assets/icons/accessories/umbrella.png` as the umbrella image source.
@@ -356,16 +367,20 @@ All of the following must be demonstrable by switching mock data or navigating t
 - [ ] Profile settings page — display name edit
 - [ ] Weather metric toggles — all metrics visible (default)
 - [ ] Weather metric toggles — each metric individually hidden
-- [ ] Weather sensitivity slider — all 5 offset levels
-- [ ] Outfit level change when sensitivity offset shifts threshold (e.g. offset "Warmer" bumps outfit selection warmer)
+- [ ] Weather sensitivity slider — all 5 positions (Always cold / Usually cold / Average / Usually warm / Always warm)
+- [ ] **Saving the slider shifts the displayed outfit on the main page** — e.g. with Feels Like = 14 °C (base outfit Cool), saving "Always cold (+2)" must visibly switch the mascot to Freezing; saving "Always warm (−2)" must visibly switch it to Warm
+- [ ] Outfit clamps at the bounds — e.g. a base outfit of Very Hot (index 0) plus offset −2 still shows Very Hot (clamped at 0)
 
 ### New — Outfit Feedback (docs/07-outfit-feedback.md)
-- [ ] Feedback widget visible before submission
-- [ ] Thumbs up flow → confirmation message → widget hidden
-- [ ] Thumbs down flow → "Too hot / Too cold?" prompt
-- [ ] "Too hot" selection → sensitivity nudged colder → confirmation → widget hidden
-- [ ] "Too cold" selection → sensitivity nudged warmer → confirmation → widget hidden
-- [ ] Widget absent after submission (once per session)
+- [ ] Feedback widget visible on the active hour/day card
+- [ ] "Looks good" → widget hidden for that key, toast shown, no offset / outfit change
+- [ ] "Dress warmer" → `sensitivityOffset += 1` (clamped to `+2`), main-page mascot + clothing cards immediately switch to the heavier outfit, toast shown
+- [ ] "Dress cooler" → `sensitivityOffset -= 1` (clamped to `-2`), main-page mascot + clothing cards immediately switch to the lighter outfit, toast shown
+- [ ] **Extremes silent no-op:** offset already at `+2` and user clicks Dress warmer → offset stays at `+2`, outfit unchanged, toast still appears. Same for `-2` + Dress cooler.
+- [ ] Visible outfit also clamps at the outfit-array bounds (e.g. on a Very Hot day, Dress cooler may bump the offset but the displayed outfit stays Very Hot until the user encounters a colder hour/day)
+- [ ] **Feedback persists to slider:** after clicking Dress warmer, opening Preferences shows the slider one notch toward "Always cold"
+- [ ] X (close) hides the widget for that key without changing the offset
+- [ ] Widget reappears on a different hour/day card unless that key is also dismissed
 
 ---
 
